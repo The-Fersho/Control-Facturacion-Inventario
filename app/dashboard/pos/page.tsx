@@ -18,6 +18,7 @@ import {
   cajaStorage,
   companyStorage,
   movementStorage,
+  priceConfigStorage,
 } from "@/lib/storage"
 import type { Product, Client, Sale, SaleItem, Credit, InventoryMovement } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
@@ -33,6 +34,13 @@ export default function POSPage() {
   const [discount, setDiscount] = useState<number>(0)
   const [includeIVA, setIncludeIVA] = useState(true)
   const [documentType, setDocumentType] = useState<"ticket" | "factura">("ticket")
+  const [priceType, setPriceType] = useState<"price1" | "price2" | "price3" | "price4">("price1")
+  const [priceConfig, setPriceConfig] = useState({
+    price1Name: "Precio General",
+    price2Name: "Precio con Descuento",
+    price3Name: "Precio Mayorista",
+    price4Name: "Precio Mayorista Especial",
+  })
   const [isTicketOpen, setIsTicketOpen] = useState(false)
   const [lastSale, setLastSale] = useState<Sale | null>(null)
 
@@ -43,6 +51,15 @@ export default function POSPage() {
   const loadData = () => {
     setProducts(productStorage.getAll().filter((p) => p.active && p.stock > 0))
     setClients(clientStorage.getAll().filter((c) => c.active))
+    const config = priceConfigStorage.get()
+    if (config) {
+      setPriceConfig({
+        price1Name: config.price1Name,
+        price2Name: config.price2Name,
+        price3Name: config.price3Name,
+        price4Name: config.price4Name,
+      })
+    }
   }
 
   const filteredProducts = products.filter(
@@ -53,6 +70,8 @@ export default function POSPage() {
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find((item) => item.productId === product.id)
+
+    const selectedPrice = product[priceType] || product.price
 
     if (existingItem) {
       if (existingItem.quantity >= product.stock) {
@@ -75,9 +94,9 @@ export default function POSPage() {
         productId: product.id,
         productName: product.name,
         quantity: 1,
-        price: product.price,
+        price: selectedPrice,
         discount: 0,
-        subtotal: product.price,
+        subtotal: selectedPrice,
       }
       setCart([...cart, newItem])
     }
@@ -279,38 +298,69 @@ export default function POSPage() {
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar productos por nombre o código..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar productos por nombre o código..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm whitespace-nowrap">Tipo de Precio:</Label>
+                  <Select value={priceType} onValueChange={(value: any) => setPriceType(value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="price1">{priceConfig.price1Name}</SelectItem>
+                      <SelectItem value="price2">{priceConfig.price2Name}</SelectItem>
+                      <SelectItem value="price3">{priceConfig.price3Name}</SelectItem>
+                      <SelectItem value="price4">{priceConfig.price4Name}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto">
-                {filteredProducts.map((product) => (
-                  <Card
-                    key={product.id}
-                    className="cursor-pointer hover:border-primary transition-colors"
-                    onClick={() => addToCart(product)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-sm line-clamp-2">{product.name}</h3>
-                          <Badge variant="secondary" className="text-xs">
-                            {product.stock}
-                          </Badge>
+                {filteredProducts.map((product) => {
+                  const displayPrice = product[priceType] || product.price
+                  return (
+                    <Card
+                      key={product.id}
+                      className="cursor-pointer hover:border-primary transition-colors"
+                      onClick={() => addToCart(product)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="space-y-2">
+                          {product.imageUrl && (
+                            <div className="w-full h-24 mb-2">
+                              <img
+                                src={product.imageUrl || "/placeholder.svg"}
+                                alt={product.name}
+                                className="w-full h-full object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/placeholder.svg?height=96&width=96"
+                                }}
+                              />
+                            </div>
+                          )}
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-semibold text-sm line-clamp-2">{product.name}</h3>
+                            <Badge variant="secondary" className="text-xs">
+                              {product.stock}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{product.code}</p>
+                          <p className="text-lg font-bold text-primary">{formatCurrency(displayPrice)}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground">{product.code}</p>
-                        <p className="text-lg font-bold text-primary">{formatCurrency(product.price)}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>

@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Search, Edit, Trash2, Package, ImageIcon } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Package, Upload } from "lucide-react"
 import { productStorage, categoryStorage, sucursalStorage, priceConfigStorage } from "@/lib/storage"
 import type { Product, Category, Sucursal } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
@@ -32,6 +32,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
   const [priceConfig, setPriceConfig] = useState({
     price1Name: "Precio General",
     price2Name: "Precio con Descuento",
@@ -125,8 +126,35 @@ export default function ProductsPage() {
     setIsDialogOpen(false)
   }
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validar que sea una imagen
+      if (!file.type.startsWith("image/")) {
+        alert("Por favor selecciona un archivo de imagen válido")
+        return
+      }
+
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("La imagen no debe superar los 5MB")
+        return
+      }
+
+      // Crear preview local
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64String = reader.result as string
+        setImagePreview(base64String)
+        setFormData({ ...formData, imageUrl: base64String })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
+    setImagePreview(product.imageUrl || "")
     setFormData({
       code: product.code,
       name: product.name,
@@ -155,6 +183,7 @@ export default function ProductsPage() {
 
   const resetForm = () => {
     setEditingProduct(null)
+    setImagePreview("")
     setFormData({
       code: "",
       name: "",
@@ -279,28 +308,54 @@ export default function ProductsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="imageUrl">URL de Imagen</Label>
+                    <Label htmlFor="imageUrl">Imagen del Producto</Label>
                     <div className="flex gap-2">
                       <Input
                         id="imageUrl"
-                        placeholder="https://ejemplo.com/imagen.jpg"
-                        value={formData.imageUrl}
-                        onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                        placeholder="URL de imagen o sube una imagen local"
+                        value={formData.imageUrl.startsWith("data:") ? "" : formData.imageUrl}
+                        onChange={(e) => {
+                          setFormData({ ...formData, imageUrl: e.target.value })
+                          setImagePreview(e.target.value)
+                        }}
                       />
-                      <Button type="button" variant="outline" size="icon">
-                        <ImageIcon className="w-4 h-4" />
-                      </Button>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          id="image-upload"
+                        />
+                        <Button type="button" variant="outline" size="icon" asChild>
+                          <label htmlFor="image-upload" className="cursor-pointer">
+                            <Upload className="w-4 h-4" />
+                          </label>
+                        </Button>
+                      </div>
                     </div>
-                    {formData.imageUrl && (
+                    {(imagePreview || formData.imageUrl) && (
                       <div className="mt-2 border rounded-lg p-2">
                         <img
-                          src={formData.imageUrl || "/placeholder.svg"}
+                          src={imagePreview || formData.imageUrl || "/placeholder.svg"}
                           alt="Preview"
-                          className="w-32 h-32 object-cover rounded"
+                          className="w-32 h-32 object-cover rounded mx-auto"
                           onError={(e) => {
                             e.currentTarget.src = "/placeholder.svg?height=128&width=128"
                           }}
                         />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => {
+                            setImagePreview("")
+                            setFormData({ ...formData, imageUrl: "" })
+                          }}
+                        >
+                          Eliminar imagen
+                        </Button>
                       </div>
                     )}
                   </div>
